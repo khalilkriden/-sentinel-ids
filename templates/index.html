@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL IDS — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;700;800&family=Syne+Mono&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:     #0a0e1a;
+  --ink2:    #111827;
+  --ink3:    #1a2236;
+  --wire:    #1e293b;
+  --wire2:   #253248;
+  --mist:    #334155;
+  --fog:     #475569;
+  --pale:    #94a3b8;
+  --snow:    #e2e8f0;
+  --white:   #f8fafc;
+  --acid:    #00ffc8;
+  --acid2:   #00d4a8;
+  --flame:   #ff4060;
+  --amber:   #ffaa00;
+  --violet:  #9d5cff;
+  --sky:     #38bdf8;
+  --safe:    #10b981;
+  --r: 4px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--ink);
+  color: var(--snow);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* noise texture */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── LAYOUT ── */
+.shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: 56px 1fr;
+  min-height: 100vh;
+  position: relative; z-index: 1;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  grid-column: 1 / -1;
+  background: rgba(10,14,26,0.95);
+  border-bottom: 1px solid var(--wire);
+  display: flex; align-items: center;
+  padding: 0 28px; gap: 20px;
+  backdrop-filter: blur(16px);
+  position: sticky; top: 0; z-index: 100;
+}
+
+.logo {
+  font-family: 'Syne Mono', monospace;
+  font-size: 17px; font-weight: 400;
+  letter-spacing: 3px;
+  color: var(--acid);
+  text-shadow: 0 0 20px rgba(0,255,200,0.4);
+  margin-right: auto;
+}
+
+.logo span { color: var(--white); opacity: 0.4; }
+
+.topbar-pill {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 12px;
+  background: var(--ink2);
+  border: 1px solid var(--wire);
+  border-radius: 100px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; color: var(--pale);
+  letter-spacing: 0.5px;
+}
+
+.pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+.pulse.green  { background: var(--safe);  box-shadow: 0 0 8px var(--safe); }
+.pulse.amber  { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.pulse.red    { background: var(--flame); box-shadow: 0 0 8px var(--flame); animation-delay:.3s }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  background: var(--ink2);
+  border-right: 1px solid var(--wire);
+  padding: 24px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+
+.nav-section {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: 2px;
+  color: var(--mist); text-transform: uppercase;
+  padding: 16px 12px 8px;
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  font-size: 14px; font-weight: 500;
+  color: var(--pale);
+  cursor: pointer; transition: all .15s;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+
+.nav-item:hover {
+  background: var(--ink3);
+  color: var(--white);
+  border-color: var(--wire);
+}
+
+.nav-item.active {
+  background: rgba(0,255,200,0.07);
+  color: var(--acid);
+  border-color: rgba(0,255,200,0.2);
+}
+
+.nav-item svg { width: 16px; height: 16px; stroke-width: 1.8; }
+
+.nav-spacer { flex: 1; }
+
+.mode-badge {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px;
+  background: var(--ink3);
+  border: 1px solid var(--wire);
+  border-radius: var(--r);
+  font-family: 'DM Mono'; font-size: 11px;
+  color: var(--pale);
+}
+
+.mode-badge.live { border-color: rgba(16,185,129,.3); color: var(--safe); }
+.mode-badge.demo { border-color: rgba(255,170,0,.3);  color: var(--amber); }
+
+/* ── MAIN CONTENT ── */
+.main {
+  padding: 32px;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 28px;
+}
+
+/* ── SECTION HEADER ── */
+.section-head {
+  display: flex; align-items: baseline; gap: 12px;
+  margin-bottom: 4px;
+}
+.section-title {
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--pale);
+}
+.section-line {
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--wire), transparent);
+}
+
+/* ── STAT CARDS ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.stat-card {
+  background: var(--ink2);
+  border: 1px solid var(--wire);
+  border-radius: var(--r);
+  padding: 20px;
+  position: relative; overflow: hidden;
+  transition: border-color .2s;
+}
+
+.stat-card:hover { border-color: var(--wire2); }
+
+.stat-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: var(--accent, var(--acid));
+  opacity: 0.6;
+}
+
+.stat-label {
+  font-family: 'DM Mono'; font-size: 10px;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--fog); margin-bottom: 10px;
+}
+
+.stat-value {
+  font-size: 36px; font-weight: 800;
+  color: var(--white); line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-sub {
+  font-size: 12px; color: var(--pale); margin-top: 6px;
+  font-weight: 500;
+}
+
+/* ── GRID 2-COL ── */
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.grid-3-1 {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 20px;
+}
+
+/* ── CARD ── */
+.card {
+  background: var(--ink2);
+  border: 1px solid var(--wire);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.card-head {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--wire);
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.card-title {
+  font-family: 'DM Mono'; font-size: 11px;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--pale);
+  display: flex; align-items: center; gap: 8px;
+}
+
+.card-title svg { width: 14px; height: 14px; color: var(--acid); }
+
+.card-body { padding: 20px; }
+
+/* ── ANALYZE FORM ── */
+.presets {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.preset {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid var(--wire);
+  border-radius: 100px;
+  color: var(--pale);
+  font-family: 'DM Mono'; font-size: 11px;
+  cursor: pointer; transition: all .15s;
+  letter-spacing: .5px;
+}
+
+.preset:hover { border-color: var(--acid); color: var(--acid); }
+.preset.active { background: var(--acid); border-color: var(--acid); color: var(--ink); font-weight: 500; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.form-group label {
+  font-family: 'DM Mono'; font-size: 10px;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--fog);
+}
+
+.form-group input,
+.form-group select {
+  background: var(--ink3);
+  border: 1px solid var(--wire);
+  border-radius: var(--r);
+  padding: 9px 12px;
+  color: var(--white);
+  font-family: 'DM Mono'; font-size: 12px;
+  outline: none;
+  transition: border-color .15s;
+  appearance: none;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--acid2);
+  box-shadow: 0 0 0 3px rgba(0,212,168,.08);
+}
+
+.form-group select option { background: var(--ink3); }
+
+.analyze-btn {
+  width: 100%;
+  padding: 13px;
+  background: var(--acid);
+  border: none; border-radius: var(--r);
+  color: var(--ink);
+  font-family: 'Syne'; font-size: 13px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase;
+  cursor: pointer; transition: all .2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 4px;
+}
+
+.analyze-btn:hover {
+  background: #00e8b0;
+  box-shadow: 0 0 30px rgba(0,255,200,.25);
+  transform: translateY(-1px);
+}
+
+.analyze-btn:active { transform: none; }
+.analyze-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+.analyze-btn svg { width: 16px; height: 16px; }
+
+.spin { animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── RESULT ── */
+.result-idle {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 12px;
+  padding: 40px; text-align: center;
+  color: var(--mist);
+  font-family: 'DM Mono'; font-size: 12px; letter-spacing: 1px;
+  min-height: 220px;
+}
+
+.result-idle svg { width: 40px; height: 40px; stroke-width: 1; opacity: .3; }
+
+.verdict {
+  padding: 20px;
+  display: flex; flex-direction: column; gap: 16px;
+  animation: fadeUp .3s ease;
+}
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+.verdict-header {
+  display: flex; align-items: center; gap: 16px;
+}
+
+.verdict-icon-wrap {
+  width: 52px; height: 52px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.verdict-icon-wrap svg { width: 24px; height: 24px; }
+
+.verdict-class {
+  font-size: 26px; font-weight: 800; line-height: 1;
+}
+
+.verdict-sev {
+  font-family: 'DM Mono'; font-size: 10px; letter-spacing: 2px;
+  text-transform: uppercase; margin-top: 4px; opacity: .7;
+}
+
+/* Risk bar */
+.risk-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+.risk-labels {
+  display: flex; justify-content: space-between;
+  font-family: 'DM Mono'; font-size: 10px; color: var(--fog);
+  letter-spacing: 1px;
+}
+
+.risk-track {
+  height: 6px; background: var(--wire);
+  border-radius: 100px; overflow: hidden;
+}
+
+.risk-fill {
+  height: 100%; border-radius: 100px;
+  transition: width .8s cubic-bezier(.25,.46,.45,.94);
+}
+
+/* Probabilities */
+.probs-title {
+  font-family: 'DM Mono'; font-size: 10px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--fog); margin-bottom: 10px;
+}
+
+.prob-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 7px;
+}
+
+.prob-name {
+  font-family: 'DM Mono'; font-size: 11px; color: var(--pale);
+  width: 120px; flex-shrink: 0;
+}
+
+.prob-track {
+  flex: 1; height: 4px; background: var(--wire);
+  border-radius: 100px; overflow: hidden;
+}
+
+.prob-bar { height: 100%; border-radius: 100px; }
+
+.prob-pct {
+  font-family: 'DM Mono'; font-size: 11px; color: var(--fog);
+  width: 36px; text-align: right;
+}
+
+/* Meta row */
+.meta-row {
+  display: flex; gap: 8px;
+}
+
+.meta-chip {
+  padding: 4px 10px;
+  background: var(--ink3); border: 1px solid var(--wire);
+  border-radius: 100px;
+  font-family: 'DM Mono'; font-size: 10px; color: var(--pale);
+  letter-spacing: .5px;
+}
+
+/* ── HISTORY TABLE ── */
+.hist-table { width: 100%; border-collapse: collapse; }
+
+.hist-table th {
+  font-family: 'DM Mono'; font-size: 9px; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--fog);
+  padding: 8px 12px; text-align: left;
+  border-bottom: 1px solid var(--wire);
+}
+
+.hist-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(30,41,59,.6);
+  font-size: 13px; font-weight: 500;
+  vertical-align: middle;
+}
+
+.hist-table tr:last-child td { border-bottom: none; }
+
+.hist-table tr { transition: background .1s; }
+.hist-table tr:hover td { background: var(--ink3); }
+
+.sev-badge {
+  display: inline-block;
+  padding: 2px 8px; border-radius: 100px;
+  font-family: 'DM Mono'; font-size: 10px; letter-spacing: 1px;
+  text-transform: uppercase; font-weight: 500;
+}
+
+/* ── CHART ── */
+.chart-wrap { height: 200px; position: relative; }
+
+/* ── EMPTY STATE ── */
+.empty {
+  padding: 40px; text-align: center;
+  font-family: 'DM Mono'; font-size: 12px; color: var(--mist);
+  letter-spacing: 1px;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--wire2); border-radius: 2px; }
+
+/* ── TOAST ── */
+.toast-wrap {
+  position: fixed; bottom: 24px; right: 24px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 999;
+}
+
+.toast {
+  padding: 12px 18px;
+  background: var(--ink2); border: 1px solid var(--wire);
+  border-radius: var(--r);
+  font-family: 'DM Mono'; font-size: 12px; color: var(--snow);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  animation: toastIn .25s ease;
+  display: flex; align-items: center; gap: 8px;
+}
+
+@keyframes toastIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:none} }
+
+/* ── RESPONSIVE ── */
+@media(max-width:1100px) {
+  .stat-grid { grid-template-columns: repeat(2,1fr); }
+  .grid-3-1  { grid-template-columns: 1fr; }
+}
+@media(max-width:800px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="logo">SENTINEL<span>IDS</span></div>
+    <div class="topbar-pill">
+      <div class="pulse green"></div>
+      ENGINE ONLINE
+    </div>
+    <div class="topbar-pill" id="tb-model">
+      <div class="pulse {% if mode == 'live' %}green{% else %}amber{% endif %}"></div>
+      {% if mode == 'live' %}MODEL LIVE{% else %}DEMO MODE{% endif %}
+    </div>
+    <div class="topbar-pill">
+      <div class="pulse red"></div>
+      <span id="tb-scans">{{ stats.total }}</span> SCANS
+    </div>
+  </header>
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="nav-section">Navigation</div>
+    <a href="/" class="nav-item active">
+      <i data-feather="activity"></i> Dashboard
+    </a>
+    <a href="/history" class="nav-item">
+      <i data-feather="clock"></i> History
+    </a>
+
+    <div class="nav-spacer"></div>
+
+    <div class="mode-badge {% if mode == 'live' %}live{% else %}demo{% endif %}">
+      <i data-feather="{% if mode == 'live' %}cpu{% else %}alert-circle{% endif %}" style="width:14px;height:14px"></i>
+      {% if mode == 'live' %}Model loaded{% else %}Demo heuristics{% endif %}
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- STAT CARDS -->
+    <div>
+      <div class="section-head">
+        <div class="section-title">Overview</div>
+        <div class="section-line"></div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card" style="--accent:#00ffc8">
+          <div class="stat-label">Total Scans</div>
+          <div class="stat-value" id="s-total">{{ stats.total }}</div>
+          <div class="stat-sub">connections analyzed</div>
+        </div>
+        <div class="stat-card" style="--accent:#10b981">
+          <div class="stat-label">Clean Traffic</div>
+          <div class="stat-value" id="s-safe" style="color:#10b981">{{ stats.safe }}</div>
+          <div class="stat-sub">no threat detected</div>
+        </div>
+        <div class="stat-card" style="--accent:#ff4060">
+          <div class="stat-label">Threats Detected</div>
+          <div class="stat-value" id="s-threats" style="color:#ff4060">{{ stats.threats }}</div>
+          <div class="stat-sub">malicious connections</div>
+        </div>
+        <div class="stat-card" style="--accent:#9d5cff">
+          <div class="stat-label">Critical Alerts</div>
+          <div class="stat-value" id="s-critical" style="color:#9d5cff">{{ stats.critical }}</div>
+          <div class="stat-sub">backdoor / worms</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYZE + RESULT -->
+    <div class="grid-3-1">
+
+      <!-- Form -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <i data-feather="terminal"></i>
+            Analyze Connection
+          </div>
+          <span style="font-family:'DM Mono';font-size:10px;color:var(--fog)">Ctrl+Enter to run</span>
+        </div>
+        <div class="card-body">
+
+          <div class="presets">
+            <button class="preset" onclick="loadPreset('normal',this)">Normal</button>
+            <button class="preset" onclick="loadPreset('dos',this)">DoS</button>
+            <button class="preset" onclick="loadPreset('recon',this)">Recon</button>
+            <button class="preset" onclick="loadPreset('exploit',this)">Exploit</button>
+            <button class="preset" onclick="loadPreset('backdoor',this)">Backdoor</button>
+            <button class="preset" onclick="loadPreset('fuzzer',this)">Fuzzer</button>
+          </div>
+
+          <!-- Protocol -->
+          <div style="font-family:'DM Mono';font-size:9px;letter-spacing:2px;color:var(--mist);text-transform:uppercase;margin-bottom:8px">Protocol</div>
+          <div class="form-grid" style="margin-bottom:16px">
+            <div class="form-group">
+              <label>Protocol</label>
+              <select id="f-proto">
+                <option value="tcp">tcp</option>
+                <option value="udp">udp</option>
+                <option value="icmp">icmp</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Service</label>
+              <select id="f-service">
+                <option value="http">http</option>
+                <option value="ftp">ftp</option>
+                <option value="smtp">smtp</option>
+                <option value="dns">dns</option>
+                <option value="ssh">ssh</option>
+                <option value="-">-</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>State</label>
+              <select id="f-state">
+                <option value="FIN">FIN</option>
+                <option value="CON">CON</option>
+                <option value="REQ">REQ</option>
+                <option value="RST">RST</option>
+                <option value="INT">INT</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Traffic -->
+          <div style="font-family:'DM Mono';font-size:9px;letter-spacing:2px;color:var(--mist);text-transform:uppercase;margin-bottom:8px">Traffic</div>
+          <div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px">
+            <div class="form-group"><label>Src Bytes</label><input id="f-sbytes" type="number" value="5000"></div>
+            <div class="form-group"><label>Dst Bytes</label><input id="f-dbytes" type="number" value="3000"></div>
+            <div class="form-group"><label>Rate (p/s)</label><input id="f-rate"   type="number" value="100"></div>
+            <div class="form-group"><label>Src Pkts</label> <input id="f-spkts"  type="number" value="10"></div>
+            <div class="form-group"><label>Dst Pkts</label> <input id="f-dpkts"  type="number" value="8"></div>
+            <div class="form-group"><label>Duration</label> <input id="f-dur"    type="number" step=".001" value="0.1"></div>
+          </div>
+
+          <!-- Loss & TTL -->
+          <div style="font-family:'DM Mono';font-size:9px;letter-spacing:2px;color:var(--mist);text-transform:uppercase;margin-bottom:8px">Loss & TTL</div>
+          <div class="form-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+            <div class="form-group"><label>Src Loss</label><input id="f-sloss" type="number" value="0"></div>
+            <div class="form-group"><label>Dst Loss</label><input id="f-dloss" type="number" value="0"></div>
+            <div class="form-group"><label>Src TTL</label> <input id="f-sttl"  type="number" value="64"></div>
+            <div class="form-group"><label>Dst TTL</label> <input id="f-dttl"  type="number" value="64"></div>
+          </div>
+
+          <!-- Load -->
+          <div style="font-family:'DM Mono';font-size:9px;letter-spacing:2px;color:var(--mist);text-transform:uppercase;margin-bottom:8px">Load & Jitter</div>
+          <div class="form-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+            <div class="form-group"><label>Src Load</label><input id="f-sload" type="number" value="1000"></div>
+            <div class="form-group"><label>Dst Load</label><input id="f-dload" type="number" value="800"></div>
+            <div class="form-group"><label>Src Jit</label> <input id="f-sjit"  type="number" step=".001" value="0.01"></div>
+            <div class="form-group"><label>Dst Jit</label> <input id="f-djit"  type="number" step=".001" value="0.01"></div>
+          </div>
+
+          <button class="analyze-btn" id="analyze-btn" onclick="analyze()">
+            <i data-feather="zap" id="btn-icon"></i>
+            <span id="btn-text">Run Analysis</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <i data-feather="shield"></i> Threat Assessment
+          </div>
+          <div id="result-badge" style="font-family:'DM Mono';font-size:10px;color:var(--fog)">IDLE</div>
+        </div>
+        <div id="result-container">
+          <div class="result-idle">
+            <i data-feather="crosshair"></i>
+            <div>AWAITING INPUT</div>
+            <div style="font-size:11px;margin-top:4px;opacity:.6">Configure parameters and run analysis</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHART + RECENT -->
+    <div class="grid-2">
+
+      <!-- Distribution chart -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><i data-feather="bar-chart-2"></i> Detection Distribution</div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrap">
+            <canvas id="dist-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent scans -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><i data-feather="list"></i> Recent Scans</div>
+          <a href="/history" style="font-family:'DM Mono';font-size:10px;color:var(--acid);text-decoration:none;letter-spacing:.5px">View all →</a>
+        </div>
+        {% if stats.recent %}
+        <table class="hist-table">
+          <thead>
+            <tr>
+              <th>#</th><th>Prediction</th><th>Severity</th><th>Confidence</th><th>ms</th>
+            </tr>
+          </thead>
+          <tbody id="recent-tbody">
+            {% for r in stats.recent %}
+            <tr>
+              <td style="font-family:'DM Mono';font-size:11px;color:var(--fog)">{{ r.id }}</td>
+              <td style="font-weight:700">{{ r.prediction }}</td>
+              <td>
+                <span class="sev-badge" style="
+                  background: {{ {'none':'rgba(16,185,129,.15)','low':'rgba(234,179,8,.15)','medium':'rgba(249,115,22,.15)','high':'rgba(239,68,68,.15)','critical':'rgba(139,92,246,.15)'}[r.severity] }};
+                  color: {{ {'none':'#10b981','low':'#eab308','medium':'#f97316','high':'#ef4444','critical':'#8b5cf6'}[r.severity] }};
+                ">{{ r.severity }}</span>
+              </td>
+              <td style="font-family:'DM Mono';font-size:12px">{{ r.confidence }}%</td>
+              <td style="font-family:'DM Mono';font-size:11px;color:var(--fog)">{{ r.inference_ms }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No scans yet — run your first analysis above</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast container -->
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+feather.replace();
+
+// ── Presets ──────────────────────────────────────────────────────────────────
+const PRESETS = {
+  analysis: {proto:'unas',service:'-',state:'INT',sbytes:200.0,dbytes:0.0,rate:111111.107,dur:0.0,spkts:2.0,dpkts:0.0,sttl:254.0,dttl:0.0,sload:88888888.0,dload:0.0,sloss:0.0,sjit:0.0,djit:0.0},
+  backdoor: {proto:'ddp',service:'-',state:'INT',sbytes:200.0,dbytes:0.0,rate:111111.107,dur:0.0,spkts:2.0,dpkts:0.0,sttl:254.0,dttl:0.0,sload:88888888.0,dload:0.0,sloss:0.0,sjit:0.0,djit:0.0},
+  dos: {proto:'encap',service:'-',state:'INT',sbytes:200.0,dbytes:0.0,rate:111111.107,dur:0.0,spkts:2.0,dpkts:0.0,sttl:254.0,dttl:0.0,sload:88888888.0,dload:0.0,sloss:0.0,sjit:0.0,djit:0.0},
+  exploit: {proto:'tcp',service:'http',state:'FIN',sbytes:860.0,dbytes:26136.0,rate:73.123,dur:0.506,spkts:12.0,dpkts:26.0,sttl:62.0,dttl:252.0,sload:12474.332,dload:397328.813,sloss:2.0,sjit:3178.403,djit:2219.546},
+  fuzzer: {proto:'tcp',service:'ftp',state:'FIN',sbytes:2616.0,dbytes:682.0,rate:34.05,dur:0.675,spkts:12.0,dpkts:12.0,sttl:254.0,dttl:252.0,sload:28400.965,dload:7414.097,sloss:3.0,sjit:3035.187,djit:64.823},
+  generic: {proto:'udp',service:'dns',state:'INT',sbytes:114.0,dbytes:0.0,rate:333333.322,dur:0.0,spkts:2.0,dpkts:0.0,sttl:254.0,dttl:0.0,sload:152000000.0,dload:0.0,sloss:0.0,sjit:0.0,djit:0.0},
+  normal: {proto:'tcp',service:'-',state:'FIN',sbytes:534.0,dbytes:268.0,rate:33.374,dur:0.449,spkts:10.0,dpkts:6.0,sttl:254.0,dttl:252.0,sload:8561.499,dload:3987.06,sloss:2.0,sjit:2415.838,djit:115.807},
+  recon: {proto:'tcp',service:'http',state:'FIN',sbytes:888.0,dbytes:268.0,rate:83.602,dur:0.179,spkts:10.0,dpkts:6.0,sttl:254.0,dttl:252.0,sload:35670.094,dload:9987.627,sloss:2.0,sjit:1004.216,djit:60.207},
+  shellcode: {proto:'udp',service:'-',state:'INT',sbytes:240.0,dbytes:0.0,rate:76923.078,dur:0.0,spkts:2.0,dpkts:0.0,sttl:254.0,dttl:0.0,sload:73846152.0,dload:0.0,sloss:0.0,sjit:0.0,djit:0.0},
+  worms: {proto:'tcp',service:'http',state:'FIN',sbytes:8682.0,dbytes:268.0,rate:49.484,dur:0.384,spkts:14.0,dpkts:6.0,sttl:254.0,dttl:252.0,sload:167975.391,dload:4667.141,sloss:4.0,sjit:1625.205,djit:82.153}
+};
+
+function loadPreset(name, btn) {
+  document.querySelectorAll('.preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const p = PRESETS[name]; if (!p) return;
+  Object.entries(p).forEach(([k, v]) => {
+    const el = document.getElementById('f-' + k);
+    if (el) el.value = v;
+  });
+}
+
+// ── Analyze ───────────────────────────────────────────────────────────────────
+async function analyze() {
+  const btn  = document.getElementById('analyze-btn');
+  const icon = document.getElementById('btn-icon');
+  const txt  = document.getElementById('btn-text');
+
+  btn.disabled = true;
+  icon.outerHTML = `<i data-feather="loader" id="btn-icon" class="spin"></i>`;
+  feather.replace();
+  document.getElementById('btn-text').textContent = 'Analyzing...';
+
+  const payload = {
+    dur:     +document.getElementById('f-dur').value    || 0,
+    proto:   document.getElementById('f-proto').value,
+    service: document.getElementById('f-service').value,
+    state:   document.getElementById('f-state').value,
+    spkts:   +document.getElementById('f-spkts').value  || 0,
+    dpkts:   +document.getElementById('f-dpkts').value  || 0,
+    sbytes:  +document.getElementById('f-sbytes').value || 0,
+    dbytes:  +document.getElementById('f-dbytes').value || 0,
+    rate:    +document.getElementById('f-rate').value   || 0,
+    sttl:    +document.getElementById('f-sttl').value   || 64,
+    dttl:    +document.getElementById('f-dttl').value   || 64,
+    sload:   +document.getElementById('f-sload').value  || 0,
+    dload:   +document.getElementById('f-dload').value  || 0,
+    sloss:   +document.getElementById('f-sloss').value  || 0,
+    dloss:   +document.getElementById('f-dloss').value  || 0,
+    sjit:    +document.getElementById('f-sjit').value   || 0,
+    djit:    +document.getElementById('f-djit').value   || 0,
+    sinpkt:.1,dinpkt:.12,swin:255,stcpb:0,dtcpb:0,dwin:255,tcprtt:0,synack:0,ackdat:0,
+    smean:500,dmean:375,trans_depth:0,response_body_len:0,ct_srv_src:2,ct_state_ttl:1,
+    ct_dst_ltm:1,ct_src_dport_ltm:1,ct_dst_sport_ltm:1,ct_dst_src_ltm:2,is_ftp_login:0,
+    ct_ftp_cmd:0,ct_flw_http_mthd:0,ct_src_ltm:2,ct_srv_dst:2,is_sm_ips_ports:0
+  };
+
+  try {
+    const res  = await fetch('/api/predict', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderResult(data);
+    updateStats();
+    updateRecent();
+    toast(`${data.prediction} detected — ${data.inference_ms.toFixed(1)}ms`, data.color);
+  } catch(e) {
+    toast('Analysis failed: ' + e.message, '#ff4060');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('btn-icon').outerHTML = `<i data-feather="zap" id="btn-icon"></i>`;
+    feather.replace();
+    document.getElementById('btn-text').textContent = 'Run Analysis';
+  }
+}
+
+// ── Render verdict ─────────────────────────────────────────────────────────────
+function renderResult(d) {
+  document.getElementById('result-badge').textContent = d.mode === 'live' ? 'LIVE MODEL' : 'DEMO';
+  document.getElementById('result-badge').style.color = d.mode === 'live' ? '#10b981' : '#ffaa00';
+
+  const probsHTML = Object.entries(d.probabilities).map(([cls, pct]) => `
+    <div class="prob-row">
+      <div class="prob-name">${cls}</div>
+      <div class="prob-track">
+        <div class="prob-bar" style="width:${pct}%;background:${cls===d.prediction ? d.color : '#1e293b'}"></div>
+      </div>
+      <div class="prob-pct">${pct}%</div>
+    </div>`).join('');
+
+  document.getElementById('result-container').innerHTML = `
+    <div class="verdict">
+      <div class="verdict-header">
+        <div class="verdict-icon-wrap" style="background:${d.color}18;border:1px solid ${d.color}30">
+          <i data-feather="${d.icon}" style="color:${d.color}"></i>
+        </div>
+        <div>
+          <div class="verdict-class" style="color:${d.color}">${d.prediction}</div>
+          <div class="verdict-sev" style="color:${d.color}">SEVERITY: ${d.severity.toUpperCase()}</div>
+        </div>
+      </div>
+
+      <div class="risk-wrap">
+        <div class="risk-labels">
+          <span>RISK SCORE</span>
+          <span style="color:${d.color}">${d.risk_score}/100</span>
+        </div>
+        <div class="risk-track">
+          <div class="risk-fill" style="width:${d.risk_score}%;background:linear-gradient(90deg,${d.color}88,${d.color})"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="probs-title">Class Probabilities</div>
+        ${probsHTML}
+      </div>
+
+      <div class="meta-row">
+        <div class="meta-chip">⚡ ${d.inference_ms.toFixed(1)}ms</div>
+        <div class="meta-chip">🎯 ${d.confidence.toFixed(1)}% confidence</div>
+        <div class="meta-chip">Scan #${d.scan_id}</div>
+      </div>
+    </div>`;
+  feather.replace();
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function updateStats() {
+  const r = await fetch('/api/stats');
+  const d = await r.json();
+  document.getElementById('s-total').textContent    = d.total;
+  document.getElementById('s-safe').textContent     = d.safe;
+  document.getElementById('s-threats').textContent  = d.threats;
+  document.getElementById('s-critical').textContent = d.critical;
+  document.getElementById('tb-scans').textContent   = d.total;
+  updateChart(d.dist);
+}
+
+async function updateRecent() {
+  const r = await fetch('/api/history?limit=7');
+  const rows = await r.json();
+  const SEV_COLOR = {none:'#10b981',low:'#eab308',medium:'#f97316',high:'#ef4444',critical:'#8b5cf6'};
+  const SEV_BG    = {none:'rgba(16,185,129,.15)',low:'rgba(234,179,8,.15)',medium:'rgba(249,115,22,.15)',high:'rgba(239,68,68,.15)',critical:'rgba(139,92,246,.15)'};
+  const tbody = document.getElementById('recent-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-family:'DM Mono';font-size:11px;color:var(--fog)">${r.id}</td>
+      <td style="font-weight:700">${r.prediction}</td>
+      <td><span class="sev-badge" style="background:${SEV_BG[r.severity]};color:${SEV_COLOR[r.severity]}">${r.severity}</span></td>
+      <td style="font-family:'DM Mono';font-size:12px">${r.confidence}%</td>
+      <td style="font-family:'DM Mono';font-size:11px;color:var(--fog)">${r.inference_ms}</td>
+    </tr>`).join('');
+}
+
+// ── Chart ──────────────────────────────────────────────────────────────────────
+let chartInst = null;
+const COLORS = {
+  Normal:'#10b981',Generic:'#f59e0b',Exploits:'#ef4444',Fuzzers:'#f97316',
+  DoS:'#dc2626',Reconnaissance:'#eab308',Analysis:'#84cc16',
+  Backdoor:'#8b5cf6',Shellcode:'#f43f5e',Worms:'#7c3aed'
+};
+
+function updateChart(dist) {
+  const labels = Object.keys(dist).filter(k => dist[k] > 0);
+  const values = labels.map(k => dist[k]);
+  const colors = labels.map(k => COLORS[k] || '#94a3b8');
+
+  if (!labels.length) return;
+
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(document.getElementById('dist-chart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values, backgroundColor: colors.map(c => c + '99'),
+        borderColor: colors, borderWidth: 1, borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#1e293b' }, ticks: { color: '#475569', font: { family: 'DM Mono', size: 10 } } },
+        y: { grid: { color: '#1e293b' }, ticks: { color: '#475569', font: { family: 'DM Mono', size: 10 } }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+// init chart
+updateChart({{ stats.dist | tojson }});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, color = '#00ffc8') {
+  const wrap = document.getElementById('toasts');
+  const el   = document.createElement('div');
+  el.className = 'toast';
+  el.style.borderColor = color + '60';
+  el.innerHTML = `<div style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></div>${msg}`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'Enter') analyze();
+});
+</script>
+</body>
+</html>

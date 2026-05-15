@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL IDS — History</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;500;700;800&family=Syne+Mono&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/feather-icons"></script>
+<style>
+*, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+:root {
+  --ink:#0a0e1a;--ink2:#111827;--ink3:#1a2236;--wire:#1e293b;--wire2:#253248;
+  --fog:#475569;--pale:#94a3b8;--snow:#e2e8f0;--acid:#00ffc8;--acid2:#00d4a8;
+  --flame:#ff4060;--amber:#ffaa00;--safe:#10b981;--violet:#9d5cff;--r:4px;
+}
+body { background:var(--ink); color:var(--snow); font-family:'Syne',sans-serif; min-height:100vh; }
+.shell { display:grid; grid-template-columns:240px 1fr; grid-template-rows:56px 1fr; min-height:100vh; }
+.topbar {
+  grid-column:1/-1; background:rgba(10,14,26,.95);
+  border-bottom:1px solid var(--wire); display:flex; align-items:center;
+  padding:0 28px; gap:20px; backdrop-filter:blur(16px);
+  position:sticky; top:0; z-index:100;
+}
+.logo { font-family:'Syne Mono',monospace; font-size:17px; letter-spacing:3px; color:var(--acid); text-shadow:0 0 20px rgba(0,255,200,.4); margin-right:auto; }
+.logo span { color:var(--snow); opacity:.4; }
+.topbar-pill { display:flex; align-items:center; gap:7px; padding:5px 12px; background:var(--ink2); border:1px solid var(--wire); border-radius:100px; font-family:'DM Mono'; font-size:11px; color:var(--pale); }
+.pulse { width:7px; height:7px; border-radius:50%; animation:pulse 2s ease-in-out infinite; }
+.pulse.green { background:var(--safe); box-shadow:0 0 8px var(--safe); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.sidebar { background:var(--ink2); border-right:1px solid var(--wire); padding:24px 16px; display:flex; flex-direction:column; gap:4px; }
+.nav-section { font-family:'DM Mono'; font-size:9px; letter-spacing:2px; color:#334155; text-transform:uppercase; padding:16px 12px 8px; }
+.nav-item { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:var(--r); font-size:14px; font-weight:500; color:var(--pale); cursor:pointer; transition:all .15s; text-decoration:none; border:1px solid transparent; }
+.nav-item:hover { background:var(--ink3); color:var(--snow); border-color:var(--wire); }
+.nav-item.active { background:rgba(0,255,200,.07); color:var(--acid); border-color:rgba(0,255,200,.2); }
+.nav-item svg { width:16px; height:16px; stroke-width:1.8; }
+.main { padding:32px; overflow-y:auto; }
+.page-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+.page-title { font-size:22px; font-weight:800; }
+.page-sub { font-family:'DM Mono'; font-size:11px; color:var(--fog); margin-top:4px; letter-spacing:1px; }
+.filters { display:flex; gap:8px; }
+.filter-btn { padding:6px 16px; background:transparent; border:1px solid var(--wire); border-radius:100px; color:var(--pale); font-family:'DM Mono'; font-size:11px; cursor:pointer; transition:all .15s; }
+.filter-btn:hover,.filter-btn.active { border-color:var(--acid); color:var(--acid); }
+.clear-btn { padding:6px 16px; background:rgba(255,64,96,.1); border:1px solid rgba(255,64,96,.3); border-radius:100px; color:var(--flame); font-family:'DM Mono'; font-size:11px; cursor:pointer; transition:all .15s; }
+.clear-btn:hover { background:rgba(255,64,96,.2); }
+.card { background:var(--ink2); border:1px solid var(--wire); border-radius:var(--r); overflow:hidden; }
+table { width:100%; border-collapse:collapse; }
+thead th { font-family:'DM Mono'; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--fog); padding:12px 16px; text-align:left; border-bottom:1px solid var(--wire); background:var(--ink3); }
+tbody td { padding:12px 16px; border-bottom:1px solid rgba(30,41,59,.5); font-size:13px; font-weight:500; vertical-align:middle; }
+tbody tr:last-child td { border-bottom:none; }
+tbody tr { transition:background .1s; cursor:default; }
+tbody tr:hover td { background:var(--ink3); }
+.sev-badge { display:inline-block; padding:3px 10px; border-radius:100px; font-family:'DM Mono'; font-size:10px; letter-spacing:1px; text-transform:uppercase; }
+.mono { font-family:'DM Mono'; font-size:12px; color:var(--fog); }
+.pagination { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:24px; }
+.page-btn { padding:6px 14px; background:var(--ink2); border:1px solid var(--wire); border-radius:var(--r); color:var(--pale); font-family:'DM Mono'; font-size:11px; cursor:pointer; text-decoration:none; transition:all .15s; }
+.page-btn:hover,.page-btn.cur { border-color:var(--acid); color:var(--acid); }
+.empty { padding:60px; text-align:center; font-family:'DM Mono'; font-size:13px; color:var(--fog); letter-spacing:1px; }
+::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-thumb { background:var(--wire2); border-radius:2px; }
+.toast-wrap { position:fixed; bottom:24px; right:24px; z-index:999; }
+.toast { padding:12px 18px; background:var(--ink2); border:1px solid var(--wire); border-radius:var(--r); font-family:'DM Mono'; font-size:12px; color:var(--snow); box-shadow:0 8px 32px rgba(0,0,0,.4); animation:toastIn .25s ease; display:flex; align-items:center; gap:8px; }
+@keyframes toastIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:none} }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="logo">SENTINEL<span>IDS</span></div>
+    <div class="topbar-pill"><div class="pulse green"></div> ENGINE ONLINE</div>
+  </header>
+
+  <nav class="sidebar">
+    <div class="nav-section">Navigation</div>
+    <a href="/" class="nav-item"><i data-feather="activity"></i> Dashboard</a>
+    <a href="/history" class="nav-item active"><i data-feather="clock"></i> History</a>
+  </nav>
+
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <div class="page-title">Scan History</div>
+        <div class="page-sub">{{ records.total }} total records</div>
+      </div>
+      <div class="filters">
+        <a href="/history?severity=all"      class="filter-btn {% if filter=='all' %}active{% endif %}">All</a>
+        <a href="/history?severity=none"     class="filter-btn {% if filter=='none' %}active{% endif %}">Safe</a>
+        <a href="/history?severity=low"      class="filter-btn {% if filter=='low' %}active{% endif %}">Low</a>
+        <a href="/history?severity=medium"   class="filter-btn {% if filter=='medium' %}active{% endif %}">Medium</a>
+        <a href="/history?severity=high"     class="filter-btn {% if filter=='high' %}active{% endif %}">High</a>
+        <a href="/history?severity=critical" class="filter-btn {% if filter=='critical' %}active{% endif %}">Critical</a>
+        <button class="clear-btn" onclick="clearHistory()">Clear All</button>
+      </div>
+    </div>
+
+    <div class="card">
+      {% if records.items %}
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Timestamp</th><th>Prediction</th><th>Severity</th>
+            <th>Confidence</th><th>Proto</th><th>Service</th><th>State</th>
+            <th>Src Bytes</th><th>Rate</th><th>Inference</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for r in records.items %}
+        {% set sev_color = {'none':'#10b981','low':'#eab308','medium':'#f97316','high':'#ef4444','critical':'#8b5cf6'}[r.severity] %}
+        {% set sev_bg    = {'none':'rgba(16,185,129,.12)','low':'rgba(234,179,8,.12)','medium':'rgba(249,115,22,.12)','high':'rgba(239,68,68,.12)','critical':'rgba(139,92,246,.12)'}[r.severity] %}
+        <tr>
+          <td class="mono">{{ r.id }}</td>
+          <td class="mono" style="font-size:11px">{{ r.timestamp.strftime('%m/%d %H:%M:%S') }}</td>
+          <td style="font-weight:700">{{ r.prediction }}</td>
+          <td><span class="sev-badge" style="background:{{ sev_bg }};color:{{ sev_color }}">{{ r.severity }}</span></td>
+          <td class="mono">{{ '%.1f'|format(r.confidence) }}%</td>
+          <td class="mono">{{ r.proto }}</td>
+          <td class="mono">{{ r.service }}</td>
+          <td class="mono">{{ r.state }}</td>
+          <td class="mono">{{ '{:,}'.format(r.sbytes) }}</td>
+          <td class="mono">{{ '%.0f'|format(r.rate) }}</td>
+          <td class="mono" style="color:var(--acid)">{{ '%.1f'|format(r.inference_ms) }}ms</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No records found — run your first analysis on the dashboard</div>
+      {% endif %}
+    </div>
+
+    {% if records.pages > 1 %}
+    <div class="pagination">
+      {% if records.has_prev %}
+      <a href="/history?page={{ records.prev_num }}&severity={{ filter }}" class="page-btn">← Prev</a>
+      {% endif %}
+      {% for p in records.iter_pages() %}
+        {% if p %}
+        <a href="/history?page={{ p }}&severity={{ filter }}" class="page-btn {% if p==records.page %}cur{% endif %}">{{ p }}</a>
+        {% else %}<span class="mono">…</span>{% endif %}
+      {% endfor %}
+      {% if records.has_next %}
+      <a href="/history?page={{ records.next_num }}&severity={{ filter }}" class="page-btn">Next →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </main>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<script>
+feather.replace();
+function toast(msg, color='#00ffc8') {
+  const wrap = document.getElementById('toasts');
+  const el   = document.createElement('div');
+  el.className = 'toast';
+  el.style.borderColor = color + '60';
+  el.innerHTML = `<div style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0"></div>${msg}`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+async function clearHistory() {
+  if (!confirm('Clear all scan history? This cannot be undone.')) return;
+  await fetch('/api/clear', { method: 'POST' });
+  toast('History cleared');
+  setTimeout(() => location.reload(), 800);
+}
+</script>
+</body>
+</html>
